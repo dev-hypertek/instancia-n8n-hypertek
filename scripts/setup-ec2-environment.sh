@@ -52,7 +52,7 @@ echo "Ejemplo de clonación:"
 echo "git clone https://github.com/dev-hypertek/instancia-n8n-hypertek ~/hypertek"
 echo ""
 echo "Ejemplo de copia por SCP:"
-echo "scp -r -i ~/.ssh/hypertek-key /ruta/local/Instancia_AWS_Hypertek/docker ubuntu@INSTANCE_IP:~/hypertek/"
+echo "scp -r -i ~/.ssh/key_n8n_hypertek /ruta/local/Instancia_AWS_Hypertek/docker ubuntu@13.57.246.205:~/instancia-n8n-hypertek/"
 
 echo "===== Configuración básica del entorno completada ====="
 echo "Siguiente paso: Implementar la base de datos PostgreSQL"

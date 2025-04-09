@@ -50,12 +50,12 @@ Sistema integral de automatización basado en n8n, Evolution API, PostgreSQL, y 
 
 2. Transfiere los archivos a la instancia EC2:
    ```bash
-   scp -r -i ~/.ssh/hypertek-key docker scripts ubuntu@IP_INSTANCIA:~/hypertek/
+   scp -r -i ~/.ssh/key_n8n_hypertek docker scripts ubuntu@13.57.246.205:~/hypertek/
    ```
 
 3. Conéctate a la instancia EC2:
    ```bash
-   ssh -i ~/.ssh/hypertek-key ubuntu@IP_INSTANCIA
+   ssh -i ~/.ssh/key_n8n_hypertek ubuntu@13.57.246.205
    ```
 
 4. Ejecuta los scripts de configuración en orden:
