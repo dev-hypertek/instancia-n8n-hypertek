@@ -2,13 +2,7 @@
 .DS_Store
 Thumbs.db
 
-# Variables de entorno (no subir contraseñas)
-.env
-.env.local
-.env.*.local
-
 # Directorios de datos y logs
-docker/**/data/
 logs/
 backups/
 letsencrypt/
@@ -16,9 +10,6 @@ letsencrypt/
 # SSL certificates
 **/ssl/*.pem
 **/ssl/*.key
-
-# Carpetas evolution-api instances
-docker/evolution-api-instances/
 
 # Archivos temporales
 *.tmp
