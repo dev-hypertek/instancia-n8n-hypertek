@@ -1,0 +1,170 @@
+version: '3'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: hypertek-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hypertek_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citaspassword}
+      POSTGRES_DB: ${POSTGRES_DB:-bd_hypertek}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - hypertek-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hypertek_admin} -d ${POSTGRES_DB:-bd_hypertek}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: hypertek-n8n
+    restart: always
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-password}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
+      - NODE_ENV=production
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-secret-key}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-bd_hypertek}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-hypertek_admin}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-citaspassword}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://hypertek.com.co/n8n/}
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_HIRING_BANNER_ENABLED=false
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Bogota}
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./n8n-flows:/home/node/.n8n/flows
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hypertek-network
+
+  # Redis para Evolution API
+  redis-evolution:
+    image: redis:alpine
+    container_name: hypertek-redis
+    restart: always
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis-data:/data
+    networks:
+      - hypertek-network
+    ports:
+      - "6379:6379"
+
+  # Evolution API para WhatsApp
+  evolution-api:
+    image: atendai/evolution-api:v2.2.0
+    container_name: hypertek-evolution-api
+    restart: always
+    environment:
+      - SERVER_URL=${EVOLUTION_API_URL:-https://hypertek.com.co/evolution-api}
+      - AUTHENTICATION_TYPE=apikey
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-your-api-key}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - CONFIG_SESSION_PHONE_CLIENT=Chrome
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-hypertek_admin}:${POSTGRES_PASSWORD:-citaspassword}@postgres:5432/${POSTGRES_DB:-bd_hypertek}
+      - DATABASE_CONNECTION_CLIENT_NAME=hypertek_whatsapp
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_URL=${WEBHOOK_URL:-https://hypertek.com.co/n8n/webhook/whatsapp}
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_MESSAGES_UPDATE=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - DEV_MODE=false
+      - LOG_LEVEL=error
+    volumes:
+      - ./evolution-api-instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis-evolution
+    networks:
+      - hypertek-network
+    ports:
+      - "8080:8080"
+
+  # ntfy-mcp para notificaciones
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: hypertek-ntfy
+    restart: always
+    environment:
+      - NTFY_BASE_URL=${NTFY_BASE_URL:-https://hypertek.com.co/ntfy}
+      - NTFY_AUTH_FILE=/etc/ntfy/auth.db
+    volumes:
+      - ntfy-data:/var/lib/ntfy
+      - ./ntfy-config:/etc/ntfy
+    ports:
+      - "9090:80"
+    networks:
+      - hypertek-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: hypertek-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/www:/usr/share/nginx/html
+      - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - n8n
+      - evolution-api
+      - ntfy
+    networks:
+      - hypertek-network
+
+  # Certbot para SSL automático
+  certbot:
+    image: certbot/certbot
+    container_name: hypertek-certbot
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./nginx/www:/var/www/html
+    depends_on:
+      - nginx
+    command: renew
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  postgres-data:
+  n8n-data:
+  redis-data:
+  ntfy-data:
+
+networks:
+  hypertek-network:
+    driver: bridge

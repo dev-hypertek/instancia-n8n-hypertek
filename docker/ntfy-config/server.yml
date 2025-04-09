@@ -1,0 +1,4 @@
+base-url: https://hypertek.com.co/ntfy
+listen-http: :80
+auth-default-access: deny
+auth-file: /etc/ntfy/auth.db
